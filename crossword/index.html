@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>English Crossword</title>
+<style>
+:root{
+  --bg:#f6f4ef; --panel:#ffffff; --ink:#1d1d1f; --muted:#6b6b70; --line:#2b2b2e;
+  --cell:#ffffff; --hl:#dbe9ff; --cur:#ffd84d; --wrong:#ffd6d6; --wrong-ink:#c0262d;
+  --ok:#1f8a4c; --rev:#2a6fdb; --accent:#2a6fdb; --btn:#e9e7e1; --btn-ink:#1d1d1f;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#18181b; --panel:#232327; --ink:#ececf0; --muted:#a0a0a8; --line:#c9c9cf;
+    --cell:#2c2c31; --hl:#2d4366; --cur:#80691a; --wrong:#5a2326; --wrong-ink:#ff8a8f;
+    --ok:#5fd394; --rev:#8db8ff; --accent:#8db8ff; --btn:#34343a; --btn-ink:#ececf0;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:0 0 4px}
+.theme{font-size:1rem;color:var(--muted);margin:0 0 12px}
+.theme b{color:var(--ink);font-weight:600}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.controls label{font-size:.9rem;color:var(--muted)}
+select,button{font:inherit;font-size:.95rem;border-radius:8px;border:1px solid transparent;
+  padding:7px 12px;background:var(--btn);color:var(--btn-ink);cursor:pointer}
+select{border-color:var(--line)}
+button.primary{background:var(--accent);color:#fff}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) button.primary{color:#111}}
+button:disabled{opacity:.45;cursor:default}
+.layout{display:grid;grid-template-columns:minmax(0,560px) 1fr;gap:24px;align-items:start}
+@media (max-width:860px){.layout{grid-template-columns:1fr}}
+.boardcol{min-width:0}
+.cluebar{position:sticky;top:0;z-index:2;background:var(--panel);border-radius:10px;
+  padding:10px 12px;margin-bottom:10px;min-height:3.4em;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.cluebar .tag{font-weight:700;margin-right:6px}
+.cluebar .ja{color:var(--muted)}
+.board{display:grid;gap:0;padding:2px;width:max-content;margin:0 auto}
+.sq{width:var(--cs);height:var(--cs);position:relative}
+.cell{background:var(--cell);box-shadow:0 0 0 1px var(--line)}
+.cell.hl{background:var(--hl)}
+.cell.cur{background:var(--cur)}
+.cell.wrong{background:var(--wrong)}
+.cell.wrong input{color:var(--wrong-ink)}
+.cell.revealed input{color:var(--rev)}
+.cell .num{position:absolute;top:1px;left:2px;font-size:max(8px,calc(var(--cs)*.27));
+  line-height:1;color:var(--muted);pointer-events:none}
+.cell input{width:100%;height:100%;border:0;margin:0;padding:0;background:transparent;
+  color:var(--ink);text-align:center;text-transform:uppercase;font-weight:600;
+  font-size:max(16px,calc(var(--cs)*.55));caret-color:transparent;outline:none;
+  border-radius:0;-webkit-appearance:none;appearance:none;padding-top:calc(var(--cs)*.1)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}
+.status{text-align:center;min-height:1.6em;margin-top:10px;font-weight:600}
+.status.ok{color:var(--ok)} .status.ng{color:var(--wrong-ink)}
+.clues{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:560px){.clues{grid-template-columns:1fr}}
+.clues h2{font-size:1rem;margin:0 0 6px;border-bottom:2px solid var(--line);padding-bottom:2px}
+.clue{padding:6px 8px;border-radius:6px;cursor:pointer;font-size:.95rem}
+.clue:hover{background:var(--btn)}
+.clue.active{background:var(--hl)}
+.clue.done .en{color:var(--muted);text-decoration:line-through}
+.clue .n{font-weight:700;display:inline-block;min-width:1.8em}
+.clue .ja{display:block;color:var(--muted);font-size:.88rem;padding-left:1.8em}
+.cluepanel{background:var(--panel);border-radius:10px;padding:12px;max-height:calc(100vh - 140px);overflow:auto}
+@media (max-width:860px){.cluepanel{max-height:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>English Crossword</h1>
+  <p class="theme" id="theme"></p>
+  <div class="controls">
+    <label for="topic">お題</label>
+    <select id="topic"></select>
+    <button class="primary" id="newBtn">新しい問題</button>
+  </div>
+  <div class="layout">
+    <div class="boardcol">
+      <div class="cluebar" id="cluebar"></div>
+      <div class="board" id="board"></div>
+      <div class="actions">
+        <button id="checkBtn">答え合わせ</button>
+        <button id="letterBtn">1文字見る</button>
+        <button id="allBtn">全部の答えを見る</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+    <div class="cluepanel">
+      <div class="clues">
+        <div><h2>Across（ヨコ）</h2><div id="acrossList"></div></div>
+        <div><h2>Down（タテ）</h2><div id="downList"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script id="core">
+// ---- 単語帳（お題ごと。共通テスト程度の語彙）: [答え, 英語のヒント, 日本語の意味] ----
+const TOPICS = [
+ {id:"env", en:"Environment", ja:"環境・自然", words:[
+  ["CLIMATE","the usual weather conditions in an area over a long time","気候"],
+  ["POLLUTION","damage to air, water or land by harmful substances","汚染"],
+  ["RECYCLE","to treat used things so that they can be used again","再利用する"],
+  ["SPECIES","a group of animals or plants of the same kind","（生物の）種"],
+  ["ENERGY","power from sources such as electricity or fuel","エネルギー"],
+  ["FOREST","a large area covered with trees","森林"],
+  ["DROUGHT","a long period with little or no rain","干ばつ"],
+  ["PROTECT","to keep someone or something safe from harm","保護する"],
+  ["RESOURCE","something such as oil or water that people can use","資源"],
+  ["EXTINCT","no longer existing","絶滅した"],
+  ["HABITAT","the natural home of an animal or plant","生息地"],
+  ["CARBON","a chemical element found in coal and in all living things","炭素"],
+  ["WASTE","things that are thrown away because they are no longer useful","廃棄物"],
+  ["FLOOD","a large amount of water covering land that is usually dry","洪水"],
+  ["GLOBAL","relating to the whole world","地球規模の"],
+  ["SOLAR","relating to the sun","太陽の"],
+  ["OCEAN","a very large area of salt water","海洋"],
+  ["REDUCE","to make something smaller in amount","減らす"],
+  ["SURVIVE","to continue to live, especially in a difficult situation","生き残る"],
+  ["NATURAL","existing in nature; not made by people","自然の"],
+  ["DISASTER","a sudden event that causes great damage","災害"],
+  ["TEMPERATURE","how hot or cold something is","温度"],
+  ["PLASTIC","a light material made from oil, used for bottles and bags","プラスチック"],
+  ["WILDLIFE","animals and plants living in natural conditions","野生生物"]
+ ]},
+ {id:"school", en:"School and Study", ja:"学校・学び", words:[
+  ["LECTURE","a talk given to students on a subject","講義"],
+  ["SUBJECT","an area of knowledge studied at school","教科"],
+  ["STUDENT","a person who studies at a school or university","学生"],
+  ["GRADUATE","to complete a course at a school or university","卒業する"],
+  ["SCHOLARSHIP","money given to a student to help pay for study","奨学金"],
+  ["SEMESTER","one of the two periods into which a school year is divided","学期"],
+  ["ASSIGNMENT","a piece of work given to a student as part of a course","課題"],
+  ["VOCABULARY","all the words that a person knows or uses","語彙"],
+  ["DICTIONARY","a book that lists words and explains their meanings","辞書"],
+  ["LIBRARY","a building where books are kept for people to read or borrow","図書館"],
+  ["CLASSMATE","a student in the same class as you","同級生"],
+  ["TEACHER","a person whose job is to help others learn","教師"],
+  ["EXAM","a formal test of knowledge","試験"],
+  ["ESSAY","a short piece of writing on a particular subject","小論文"],
+  ["KNOWLEDGE","information and understanding gained through learning","知識"],
+  ["DISCUSS","to talk about something with other people","話し合う"],
+  ["EXPLAIN","to make something clear by giving details","説明する"],
+  ["PRACTICE","to do something regularly to improve your skill","練習する"],
+  ["CLUB","a group of people who meet to share an activity","部活動、クラブ"],
+  ["UNIVERSITY","a place of higher education where students study for degrees","大学"],
+  ["CURIOUS","wanting to know or learn about something","好奇心の強い"],
+  ["SCHEDULE","a plan that lists the times when things will happen","予定表"],
+  ["ATTEND","to go to an event or a place such as school","出席する"],
+  ["GRADE","a mark given for a student's work","成績"]
+ ]},
+ {id:"health", en:"Health and the Body", ja:"健康・からだ", words:[
+  ["HEALTH","the condition of your body and mind","健康"],
+  ["EXERCISE","physical activity done to stay strong and healthy","運動"],
+  ["DIET","the kind of food that a person usually eats","食事、食生活"],
+  ["NUTRITION","the process of getting the food needed for health and growth","栄養"],
+  ["DISEASE","an illness affecting people, animals or plants","病気"],
+  ["HOSPITAL","a place where sick or injured people are treated","病院"],
+  ["MEDICINE","a substance that you take to treat an illness","薬"],
+  ["PATIENT","a person receiving medical treatment","患者"],
+  ["SYMPTOM","a sign of an illness, such as a fever or a cough","症状"],
+  ["STRESS","a feeling of worry caused by difficult situations","ストレス"],
+  ["SLEEP","the natural state of rest in which your eyes are closed","睡眠"],
+  ["INJURY","harm done to a person's body, for example in an accident","けが"],
+  ["RECOVER","to get well again after an illness","回復する"],
+  ["MUSCLE","a part of the body that produces movement","筋肉"],
+  ["VITAMIN","a natural substance in food that is needed for good health","ビタミン"],
+  ["HABIT","something that you do often and regularly","習慣"],
+  ["BALANCE","a state in which different things are in the right amounts","バランス、均衡"],
+  ["SURGERY","medical treatment in which a doctor cuts open the body","手術"],
+  ["TREATMENT","care given to cure an illness or injury","治療"],
+  ["NURSE","a person trained to care for sick people, often in a hospital","看護師"],
+  ["FEVER","a body temperature that is higher than normal","熱"],
+  ["BREATHE","to take air into your lungs and send it out again","呼吸する"],
+  ["HEART","the organ that pumps blood around the body","心臓"],
+  ["PREVENT","to stop something from happening","防ぐ"]
+ ]},
+ {id:"tech", en:"Science and Technology", ja:"科学・技術", words:[
+  ["COMPUTER","an electronic machine that stores and processes data","コンピューター"],
+  ["DEVICE","a machine or tool made for a particular purpose","装置、機器"],
+  ["INTERNET","the worldwide network that connects computers","インターネット"],
+  ["ROBOT","a machine that can do tasks automatically","ロボット"],
+  ["DIGITAL","using information in the form of numbers, especially by computers","デジタルの"],
+  ["INVENT","to create something that did not exist before","発明する"],
+  ["SCIENCE","knowledge about the natural world based on experiments","科学"],
+  ["EXPERIMENT","a scientific test done to learn something new","実験"],
+  ["RESEARCH","careful study to discover new facts","研究"],
+  ["DATA","facts or numbers collected for study","データ"],
+  ["PASSWORD","a secret word you need to enter a computer system","パスワード"],
+  ["ONLINE","connected to or available through the internet","オンラインの"],
+  ["SCREEN","the flat surface on a TV or computer where pictures appear","画面"],
+  ["BATTERY","a device that stores electricity and provides power","電池"],
+  ["ENGINEER","a person who designs or builds machines or structures","技術者"],
+  ["PROGRAM","a set of instructions that makes a computer do a task","プログラム"],
+  ["NETWORK","a system of computers connected to each other","ネットワーク"],
+  ["INFORMATION","facts or details about something","情報"],
+  ["SATELLITE","a machine sent into space to travel around the earth","人工衛星"],
+  ["ARTIFICIAL","made by people, not happening naturally","人工の"],
+  ["DEVELOP","to make something new or more advanced","開発する"],
+  ["SPEED","how fast something moves","速さ"],
+  ["SIGNAL","a sound, light or radio wave that sends information","信号"],
+  ["INNOVATION","a new idea, method or invention","技術革新"]
+ ]},
+ {id:"travel", en:"Travel and Culture", ja:"旅・文化", words:[
+  ["JOURNEY","an act of travelling from one place to another","旅"],
+  ["PASSPORT","an official document you need to travel abroad","パスポート"],
+  ["AIRPORT","a place where planes take off and land","空港"],
+  ["LUGGAGE","the bags and cases you take on a trip","手荷物"],
+  ["SOUVENIR","something you buy to remember a place you visited","記念品、土産"],
+  ["TOURIST","a person who visits a place for pleasure","観光客"],
+  ["FOREIGN","from or relating to another country","外国の"],
+  ["CULTURE","the customs and ideas of a particular group of people","文化"],
+  ["TRADITION","a custom passed down from one generation to the next","伝統"],
+  ["FESTIVAL","a special time of celebration with many events","祭り"],
+  ["MUSEUM","a building where interesting objects are shown to the public","博物館"],
+  ["LANGUAGE","a system of words used by the people of a country","言語"],
+  ["DESTINATION","the place where someone is going","目的地"],
+  ["RESERVATION","an arrangement to keep a seat or room for you","予約"],
+  ["HOTEL","a building where travelers pay to stay the night","ホテル"],
+  ["GUIDE","a person who shows visitors around a place","案内人、ガイド"],
+  ["ABROAD","in or to a foreign country","海外に"],
+  ["CUSTOM","a usual way of doing something in a society","慣習"],
+  ["TEMPLE","a building used for religious worship","寺院"],
+  ["SIGHTSEEING","the activity of visiting famous places","観光"],
+  ["DEPART","to leave, especially to start a journey","出発する"],
+  ["ARRIVE","to reach a place","到着する"],
+  ["EXCHANGE","to give something and receive something else in return","交換する"],
+  ["HERITAGE","buildings and traditions passed down from the past","遺産"]
+ ]},
+ {id:"society", en:"Society and Work", ja:"社会・仕事", words:[
+  ["SOCIETY","people living together in an organized community","社会"],
+  ["POPULATION","the number of people living in a particular area","人口"],
+  ["ECONOMY","the system of trade, industry and money of a country","経済"],
+  ["CAREER","the series of jobs a person has during their working life","職業、経歴"],
+  ["EMPLOY","to pay someone to work for you","雇う"],
+  ["SALARY","money paid regularly to a worker, usually every month","給料"],
+  ["COMPANY","a business that sells goods or services","会社"],
+  ["GOVERNMENT","the group of people who officially control a country","政府"],
+  ["ELECTION","an event in which people vote to choose a leader","選挙"],
+  ["VOLUNTEER","a person who works without being paid","ボランティア"],
+  ["COMMUNITY","the people living in one area","地域社会"],
+  ["EQUAL","the same in size, amount or value","平等な、等しい"],
+  ["INCOME","money that a person earns","収入"],
+  ["INDUSTRY","the production of goods, especially in factories","産業"],
+  ["CITIZEN","a person who legally belongs to a country","市民"],
+  ["ELDERLY","old (a polite word used about people)","高齢の"],
+  ["PUBLIC","relating to all the people in a country","公共の"],
+  ["MEETING","an event where people come together to discuss something","会議"],
+  ["CUSTOMER","a person who buys goods or services","顧客"],
+  ["PROFIT","money earned in business after costs are paid","利益"],
+  ["POLICY","a plan of action agreed by a government or company","政策、方針"],
+  ["COLLEAGUE","a person you work with","同僚"],
+  ["WELFARE","help given to people who need it, such as the poor","福祉"],
+  ["DEBATE","a formal discussion of different opinions","討論"]
+ ]}
+];
+
+const SIZE = 13, TARGET = 14, ATTEMPTS = 40;
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function shuffle(arr,r){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+// 置けるなら交差数（1以上）、置けないなら -1
+function canPlace(g,w,r0,c0,dir){
+  const dr=dir==="D"?1:0, dc=dir==="A"?1:0, L=w.length;
+  const r1=r0+dr*(L-1), c1=c0+dc*(L-1);
+  if(r0<0||c0<0||r1>=SIZE||c1>=SIZE) return -1;
+  const at=(r,c)=>(r>=0&&c>=0&&r<SIZE&&c<SIZE)?g[r][c]:null;
+  if(at(r0-dr,c0-dc)||at(r1+dr,c1+dc)) return -1;
+  let x=0;
+  for(let i=0;i<L;i++){
+    const r=r0+dr*i,c=c0+dc*i,cell=g[r][c];
+    if(cell){ if(cell.ch!==w[i]||cell[dir]) return -1; x++; }
+    else if(at(r+dc,c+dr)||at(r-dc,c-dr)) return -1;
+  }
+  return x===L?-1:x;
+}
+function put(g,w,r0,c0,dir){
+  const dr=dir==="D"?1:0, dc=dir==="A"?1:0;
+  for(let i=0;i<w.length;i++){
+    const r=r0+dr*i,c=c0+dc*i;
+    if(!g[r][c]) g[r][c]={ch:w[i],A:false,D:false};
+    g[r][c][dir]=true;
+  }
+}
+
+function generate(words,seed){
+  const rnd=mulberry32(seed);
+  const usable=words.filter(e=>e[0].length<=SIZE);
+  let best=null;
+  for(let t=0;t<ATTEMPTS;t++){
+    const pool=shuffle(usable,rnd);
+    const g=Array.from({length:SIZE},()=>Array(SIZE).fill(null));
+    let fi=0; for(let i=1;i<Math.min(6,pool.length);i++) if(pool[i][0].length>pool[fi][0].length) fi=i;
+    const first=pool.splice(fi,1)[0];
+    const fd=rnd()<0.5?"A":"D", mid=Math.floor(SIZE/2), off=Math.floor((SIZE-first[0].length)/2);
+    const fr=fd==="A"?mid:off, fc=fd==="A"?off:mid;
+    put(g,first[0],fr,fc,fd);
+    const placed=[{e:first,r:fr,c:fc,dir:fd}];
+    let cross=0, nA=fd==="A"?1:0, nD=1-nA;
+    for(let pass=0;pass<3&&placed.length<TARGET;pass++){
+      for(let i=0;i<pool.length&&placed.length<TARGET;i++){
+        const e=pool[i]; if(!e) continue;
+        let cands=[],bx=0;
+        for(const dir of ["A","D"]) for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+          let x=canPlace(g,e[0],r,c,dir); if(x<1) continue;
+          // タテとヨコの数が偏らないよう、少ない方を少し優先する
+          const s=x*2+((dir==="A"?nA<nD:nD<nA)?1:0);
+          if(s>bx){bx=s;cands=[];} if(s===bx) cands.push([r,c,dir,x]);
+        }
+        if(!cands.length) continue;
+        const [r,c,dir,x]=cands[Math.floor(rnd()*cands.length)];
+        put(g,e[0],r,c,dir); placed.push({e,r,c,dir}); cross+=x; pool[i]=null;
+        if(dir==="A") nA++; else nD++;
+      }
+    }
+    const score=placed.length*100+cross*10-Math.abs(nA-nD)*5;
+    if(!best||score>best.score) best={score,placed};
+  }
+  return best.placed;
+}
+
+// 生成結果を盤（13×13固定）と番号付きのカギに組み立てる
+function build(placed){
+  const sol=Array.from({length:SIZE},()=>Array(SIZE).fill(null));
+  for(const p of placed){
+    const dr=p.dir==="D"?1:0, dc=p.dir==="A"?1:0;
+    for(let i=0;i<p.e[0].length;i++) sol[p.r+dr*i][p.c+dc*i]=p.e[0][i];
+  }
+  // 盤の中央に寄せる
+  let minR=SIZE,maxR=-1,minC=SIZE,maxC=-1;
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++) if(sol[r][c]){minR=Math.min(minR,r);maxR=Math.max(maxR,r);minC=Math.min(minC,c);maxC=Math.max(maxC,c);}
+  const sr=Math.floor((SIZE-(maxR-minR+1))/2)-minR, sc=Math.floor((SIZE-(maxC-minC+1))/2)-minC;
+  const grid=Array.from({length:SIZE},()=>Array(SIZE).fill(null));
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++) if(sol[r][c]) grid[r+sr][c+sc]=sol[r][c];
+  const starts={};
+  for(const p of placed){ const k=(p.r+sr)+","+(p.c+sc); (starts[k]=starts[k]||[]).push(p); }
+  const nums={}; let n=0; const entries=[];
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+    const k=r+","+c; if(!starts[k]) continue;
+    nums[k]=++n;
+    for(const p of starts[k]){
+      const dr=p.dir==="D"?1:0, dc=p.dir==="A"?1:0, cells=[];
+      for(let i=0;i<p.e[0].length;i++) cells.push([r+dr*i,c+dc*i]);
+      entries.push({num:n,dir:p.dir,answer:p.e[0],en:p.e[1],ja:p.e[2],cells});
+    }
+  }
+  return {grid,nums,entries};
+}
+</script>
+
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const store={get(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}},
+             set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
+
+let topic,seed,puz,letters,revealed,cur=null,dir="A",cellEls,clueEls,finished=false;
+
+// お題の選択肢
+const sel=$("topic");
+sel.innerHTML='<option value="random">おまかせ</option>'+TOPICS.map(t=>`<option value="${t.id}">${t.ja}（${t.en}）</option>`).join("");
+
+function parseHash(){
+  const h=new URLSearchParams(location.hash.slice(1));
+  return {t:h.get("t"),s:parseInt(h.get("s"),10)};
+}
+function newPuzzle(){
+  const choice=sel.value;
+  const t=choice==="random"?TOPICS[Math.floor(Math.random()*TOPICS.length)].id:choice;
+  load(t,Math.floor(Math.random()*1e9));
+}
+function load(tid,s){
+  topic=TOPICS.find(t=>t.id===tid)||TOPICS[0]; seed=s;
+  history.replaceState(null,"","#t="+topic.id+"&s="+seed);
+  puz=build(generate(topic.words,seed));
+  letters=puz.grid.map(row=>row.map(()=>""));
+  revealed=puz.grid.map(row=>row.map(()=>false));
+  finished=false;
+  const saved=store.get(key());
+  if(saved&&saved.sig===sig()){letters=saved.letters;revealed=saved.revealed;}
+  $("theme").innerHTML=`お題：<b>${topic.en}</b>（${topic.ja}）・${puz.entries.length}語`;
+  render(); status("");
+  const first=puz.entries.find(e=>e.dir==="A")||puz.entries[0];
+  dir=first.dir; cur=first.cells[0]; refresh();
+  cellEls[cur[0]+","+cur[1]].querySelector("input").focus({preventScroll:true});
+  checkComplete(true);
+}
+const key=()=>"xw13:"+topic.id+":"+seed;
+const sig=()=>puz.entries.map(e=>e.answer).join(",");
+const save=()=>store.set(key(),{sig:sig(),letters,revealed});
+
+function cellSize(){
+  const w=Math.min(document.querySelector(".boardcol").clientWidth||600,560);
+  return Math.max(22,Math.min(40,Math.floor((w-6)/SIZE)));
+}
+function render(){
+  const b=$("board");
+  b.style.setProperty("--cs",cellSize()+"px");
+  b.style.gridTemplateColumns=`repeat(${SIZE},var(--cs))`;
+  b.innerHTML=""; cellEls={};
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+    const d=document.createElement("div");
+    if(!puz.grid[r][c]){d.className="sq";b.appendChild(d);continue;}
+    d.className="sq cell"+(revealed[r][c]?" revealed":"");
+    const k=r+","+c;
+    if(puz.nums[k]){const s=document.createElement("span");s.className="num";s.textContent=puz.nums[k];d.appendChild(s);}
+    const inp=document.createElement("input");
+    inp.setAttribute("maxlength","2"); inp.setAttribute("autocomplete","off");
+    inp.setAttribute("autocorrect","off"); inp.setAttribute("autocapitalize","characters");
+    inp.setAttribute("spellcheck","false"); inp.setAttribute("aria-label",`row ${r+1} column ${c+1}`);
+    inp.value=letters[r][c];
+    let wasCur=false;
+    inp.addEventListener("pointerdown",()=>{wasCur=cur&&cur[0]===r&&cur[1]===c;});
+    inp.addEventListener("click",()=>{if(wasCur) toggleDir();});
+    inp.addEventListener("focus",()=>select(r,c));
+    inp.addEventListener("keydown",ev=>onKey(ev,r,c));
+    inp.addEventListener("input",()=>{
+      const v=inp.value.replace(/[^a-zA-Z]/g,"");
+      const ch=v.slice(-1).toUpperCase();
+      setLetter(r,c,ch);
+      if(ch) advance(r,c);
+    });
+    d.appendChild(inp); b.appendChild(d); cellEls[k]=d;
+  }
+  // カギの一覧
+  clueEls={};
+  for(const [D,listId] of [["A","acrossList"],["D","downList"]]){
+    const box=$(listId); box.innerHTML="";
+    for(const e of puz.entries.filter(x=>x.dir===D).sort((a,b)=>a.num-b.num)){
+      const el=document.createElement("div"); el.className="clue";
+      el.innerHTML=`<span class="n">${e.num}</span><span class="en">${esc(e.en)} (${e.answer.length})</span><span class="ja">${esc(e.ja)}</span>`;
+      el.addEventListener("click",()=>focusEntry(e));
+      box.appendChild(el); clueEls[e.num+D]=el;
+    }
+  }
+  updateDone();
+}
+const esc=s=>s.replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+
+const entryAt=(r,c,D)=>puz.entries.find(e=>e.dir===D&&e.cells.some(([a,b])=>a===r&&b===c));
+function select(r,c){
+  if(!(cur&&cur[0]===r&&cur[1]===c)){
+    cur=[r,c];
+    if(!entryAt(r,c,dir)) dir=dir==="A"?"D":"A";
+  }
+  refresh();
+}
+function toggleDir(){
+  if(!cur) return;
+  const o=dir==="A"?"D":"A";
+  if(entryAt(cur[0],cur[1],o)){dir=o;refresh();}
+}
+function focusCell(r,c){
+  const el=cellEls[r+","+c]; if(!el) return;
+  cur=[r,c]; if(!entryAt(r,c,dir)) dir=dir==="A"?"D":"A";
+  el.querySelector("input").focus({preventScroll:false}); refresh();
+}
+function focusEntry(e){
+  dir=e.dir;
+  const empty=e.cells.find(([r,c])=>!letters[r][c])||e.cells[0];
+  cur=empty; cellEls[empty[0]+","+empty[1]].querySelector("input").focus(); refresh();
+}
+function refresh(){
+  for(const k in cellEls) cellEls[k].classList.remove("hl","cur");
+  for(const k in clueEls) clueEls[k].classList.remove("active");
+  if(!cur) return;
+  const e=entryAt(cur[0],cur[1],dir);
+  if(e){
+    e.cells.forEach(([r,c])=>cellEls[r+","+c].classList.add("hl"));
+    const ce=clueEls[e.num+e.dir]; ce.classList.add("active");
+    const panel=document.querySelector(".cluepanel");
+    if(panel.scrollHeight>panel.clientHeight){
+      const top=ce.offsetTop-panel.offsetTop;
+      if(top<panel.scrollTop||top>panel.scrollTop+panel.clientHeight-ce.offsetHeight) panel.scrollTop=top-40;
+    }
+    $("cluebar").innerHTML=`<span class="tag">${e.num} ${e.dir==="A"?"Across":"Down"}</span>${esc(e.en)} (${e.answer.length})<br><span class="ja">${esc(e.ja)}</span>`;
+  }
+  cellEls[cur[0]+","+cur[1]].classList.add("cur");
+}
+function step(r,c,d){
+  const e=entryAt(r,c,dir); if(!e) return null;
+  const i=e.cells.findIndex(([a,b])=>a===r&&b===c);
+  return e.cells[i+d]||null;
+}
+function advance(r,c){const n=step(r,c,1); if(n) focusCell(n[0],n[1]);}
+function nextEntry(d){
+  const list=puz.entries.slice().sort((a,b)=>(a.dir===b.dir?a.num-b.num:a.dir==="A"?-1:1));
+  const e=entryAt(cur[0],cur[1],dir);
+  const i=list.indexOf(e);
+  focusEntry(list[(i+d+list.length)%list.length]);
+}
+function moveArrow(r,c,dr,dc){
+  const axis=dc?"A":"D";
+  if(axis!==dir&&entryAt(r,c,axis)){dir=axis;refresh();return;}
+  let rr=r+dr,cc=c+dc;
+  while(rr>=0&&cc>=0&&rr<SIZE&&cc<SIZE){ if(puz.grid[rr][cc]){focusCell(rr,cc);return;} rr+=dr;cc+=dc; }
+}
+function onKey(ev,r,c){
+  if(ev.ctrlKey||ev.metaKey||ev.altKey) return;
+  const k=ev.key;
+  if(/^[a-zA-Z]$/.test(k)){ev.preventDefault();setLetter(r,c,k.toUpperCase());advance(r,c);return;}
+  switch(k){
+    case "Backspace":
+      ev.preventDefault();
+      if(letters[r][c]&&!revealed[r][c]) setLetter(r,c,"");
+      else { const p=step(r,c,-1); if(p){ setLetter(p[0],p[1],""); focusCell(p[0],p[1]); } }
+      break;
+    case "Delete": ev.preventDefault(); setLetter(r,c,""); break;
+    case "ArrowLeft": ev.preventDefault(); moveArrow(r,c,0,-1); break;
+    case "ArrowRight": ev.preventDefault(); moveArrow(r,c,0,1); break;
+    case "ArrowUp": ev.preventDefault(); moveArrow(r,c,-1,0); break;
+    case "ArrowDown": ev.preventDefault(); moveArrow(r,c,1,0); break;
+    case " ": ev.preventDefault(); toggleDir(); break;
+    case "Tab": ev.preventDefault(); nextEntry(ev.shiftKey?-1:1); break;
+    case "Enter": ev.preventDefault(); nextEntry(1); break;
+  }
+}
+function setLetter(r,c,ch){
+  const el=cellEls[r+","+c];
+  if(revealed[r][c]){el.querySelector("input").value=letters[r][c];return;}
+  letters[r][c]=ch; el.querySelector("input").value=ch; el.classList.remove("wrong");
+  save(); updateDone(); checkComplete(false);
+}
+function updateDone(){
+  for(const e of puz.entries){
+    // 正誤は答え合わせまで明かさず、全マスが埋まったカギだけを薄くする
+    clueEls[e.num+e.dir].classList.toggle("done",e.cells.every(([r,c])=>letters[r][c]));
+  }
+}
+function status(msg,cls){const s=$("status");s.textContent=msg;s.className="status"+(cls?" "+cls:"");}
+function allCells(){const a=[];for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)if(puz.grid[r][c])a.push([r,c]);return a;}
+function checkComplete(silent){
+  const cells=allCells();
+  if(cells.some(([r,c])=>!letters[r][c])) {finished=false;return;}
+  const wrong=cells.filter(([r,c])=>letters[r][c]!==puz.grid[r][c]).length;
+  if(wrong===0){
+    finished=true; updateDone();
+    const used=cells.filter(([r,c])=>revealed[r][c]).length;
+    status(used?`完成！（答えを見たマス：${used}）`:"完成！ 全問正解です",used?"":"ok");
+  } else if(!silent) status("全部埋まりましたが、まだ違うところがあります。「答え合わせ」で確かめましょう","ng");
+}
+
+$("checkBtn").addEventListener("click",()=>{
+  let wrong=0,blank=0;
+  for(const [r,c] of allCells()){
+    const el=cellEls[r+","+c];
+    if(!letters[r][c]){blank++;continue;}
+    const ng=letters[r][c]!==puz.grid[r][c]; el.classList.toggle("wrong",ng); if(ng) wrong++;
+  }
+  if(wrong) status(`違う文字が ${wrong} 個あります（赤いマス）`+(blank?`。空きは ${blank} マス`:""),"ng");
+  else if(blank) status(`今のところ全部正しいです。残り ${blank} マス`,"ok");
+  else checkComplete(false);
+});
+$("letterBtn").addEventListener("click",()=>{
+  if(!cur) return;
+  const [r,c]=cur;
+  revealed[r][c]=true; letters[r][c]=puz.grid[r][c];
+  const el=cellEls[r+","+c]; el.classList.add("revealed"); el.classList.remove("wrong");
+  el.querySelector("input").value=letters[r][c];
+  save(); updateDone(); checkComplete(false); advance(r,c);
+});
+$("allBtn").addEventListener("click",()=>{
+  if(!confirm("全部の答えを表示します。よろしいですか？")) return;
+  for(const [r,c] of allCells()){
+    if(letters[r][c]!==puz.grid[r][c]){revealed[r][c]=true;letters[r][c]=puz.grid[r][c];}
+    const el=cellEls[r+","+c]; el.classList.remove("wrong");
+    if(revealed[r][c]) el.classList.add("revealed");
+    el.querySelector("input").value=letters[r][c];
+  }
+  save(); finished=true; updateDone(); status("答えを表示しました（青い文字が見た答え）");
+});
+$("newBtn").addEventListener("click",newPuzzle);
+sel.addEventListener("change",newPuzzle);
+window.addEventListener("resize",()=>{$("board").style.setProperty("--cs",cellSize()+"px");});
+
+const h=parseHash();
+if(h.t&&TOPICS.some(t=>t.id===h.t)&&Number.isFinite(h.s)){sel.value=h.t;load(h.t,h.s);}
+else newPuzzle();
+})();
+</script>
+</body>
+</html>
